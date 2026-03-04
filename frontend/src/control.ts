@@ -30,6 +30,17 @@ async function setupWebRTC(audioStream: MediaStream) {
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
   });
 
+  // Display received video from the display-page webcam
+  pc.ontrack = (e) => {
+    if (e.track.kind === "video") {
+      console.log("[webrtc] received display cam video track");
+      const videoEl = document.getElementById("display-cam") as HTMLVideoElement;
+      videoEl.srcObject = e.streams[0];
+      videoEl.style.display = "block";
+      videoEl.play();
+    }
+  };
+
   // Add processed audio track
   for (const track of audioStream.getAudioTracks()) {
     pc.addTrack(track, audioStream);
@@ -65,6 +76,13 @@ async function setupWebRTC(audioStream: MediaStream) {
     } else if (msg.type === "answer") {
       await pc!.setRemoteDescription(msg.sdp);
       console.log("[webrtc] received answer");
+    } else if (msg.type === "offer") {
+      // Renegotiation offer from display (e.g. webcam track added)
+      await pc!.setRemoteDescription(msg.sdp);
+      const answer = await pc!.createAnswer();
+      await pc!.setLocalDescription(answer);
+      signaling.send({ type: "answer", sdp: pc!.localDescription! });
+      console.log("[webrtc] handled renegotiation offer from display");
     } else if (msg.type === "ice") {
       await pc!.addIceCandidate(msg.candidate);
     }

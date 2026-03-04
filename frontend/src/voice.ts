@@ -16,6 +16,7 @@ export async function startVoice(): Promise<MediaStream> {
     windowSize: 0.05,
     delayTime: 0,
     feedback: 0,
+    delay: 10,
   });
 
   // 2. The Thundering Bass (Equalizer)

@@ -7,6 +7,8 @@ const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 // --- WebRTC receive side ---
 const signaling = new SignalingClient(getSignalingUrl());
 let pc: RTCPeerConnection | null = null;
+let cameraStream: MediaStream | null = null;
+let cameraAdded = false;
 
 function setupWebRTC() {
   pc = new RTCPeerConnection({
@@ -42,6 +44,23 @@ function setupWebRTC() {
 
   pc.onconnectionstatechange = () => {
     console.log("[webrtc] connection state:", pc!.connectionState);
+    // Once the initial connection is established, add webcam track and renegotiate
+    if (pc!.connectionState === "connected" && cameraStream && !cameraAdded) {
+      cameraAdded = true;
+      console.log("[display] adding webcam track, renegotiating");
+      for (const track of cameraStream.getVideoTracks()) {
+        pc!.addTrack(track, cameraStream);
+      }
+    }
+  };
+
+  // Triggered when addTrack causes renegotiation — display becomes the offerer
+  pc.onnegotiationneeded = async () => {
+    if (pc!.signalingState !== "stable") return;
+    console.log("[webrtc] renegotiation needed, sending offer");
+    const offer = await pc!.createOffer();
+    await pc!.setLocalDescription(offer);
+    signaling.send({ type: "offer", sdp: pc!.localDescription! });
   };
 
   // Handle signaling messages from control page
@@ -52,6 +71,10 @@ function setupWebRTC() {
       await pc!.setLocalDescription(answer);
       signaling.send({ type: "answer", sdp: pc!.localDescription! });
       console.log("[webrtc] sent answer");
+    } else if (msg.type === "answer") {
+      // Renegotiation answer from control
+      await pc!.setRemoteDescription(msg.sdp);
+      console.log("[webrtc] received renegotiation answer");
     } else if (msg.type === "ice") {
       await pc!.addIceCandidate(msg.candidate);
     }
@@ -63,6 +86,17 @@ connectButton.addEventListener("click", async () => {
 
   // Init Three.js scene
   createWizardScene(canvas);
+
+  // Detect webcam — if present, stream it to the control page once connected
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    if (devices.some((d) => d.kind === "videoinput")) {
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      console.log("[display] webcam detected, will stream to control on connect");
+    }
+  } catch (err) {
+    console.warn("[display] webcam check failed:", err);
+  }
 
   setupWebRTC();
   await signaling.connect();
