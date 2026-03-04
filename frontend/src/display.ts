@@ -1,6 +1,8 @@
 import { SignalingClient, getSignalingUrl } from "./signaling-client";
+import { createWizardScene, updateFaceMesh } from "./wizard-head";
 
 const connectButton = document.getElementById("connect") as HTMLButtonElement;
+const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 
 // --- WebRTC receive side ---
 const signaling = new SignalingClient(getSignalingUrl());
@@ -19,17 +21,15 @@ function setupWebRTC() {
     audio.play();
   };
 
-  // Receive blendshape data
+  // Receive landmark data as binary Float32Array
   pc.ondatachannel = (e) => {
     console.log("[webrtc] data channel received:", e.channel.label);
     const channel = e.channel;
+    channel.binaryType = "arraybuffer";
     channel.onmessage = (evt) => {
-      const frame = JSON.parse(evt.data) as {
-        t: number;
-        bs: Record<string, number>;
-      };
-      // TODO: feed frame.bs into the Three.js wizard head morph targets
-      console.log("[blendshapes]", frame.bs);
+      if (evt.data instanceof ArrayBuffer) {
+        updateFaceMesh(new Float32Array(evt.data));
+      }
     };
   };
 
@@ -60,6 +60,9 @@ function setupWebRTC() {
 
 connectButton.addEventListener("click", async () => {
   connectButton.remove();
+
+  // Init Three.js scene
+  createWizardScene(canvas);
 
   setupWebRTC();
   await signaling.connect();

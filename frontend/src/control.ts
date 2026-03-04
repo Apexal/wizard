@@ -35,8 +35,11 @@ async function setupWebRTC(audioStream: MediaStream) {
     pc.addTrack(track, audioStream);
   }
 
-  // Create data channel for blendshapes
-  dataChannel = pc.createDataChannel("blendshapes", { ordered: false });
+  // Create data channel for face data — unreliable so stale frames are dropped
+  dataChannel = pc.createDataChannel("blendshapes", {
+    ordered: false,
+    maxRetransmits: 0,
+  });
   dataChannel.onopen = () => console.log("[webrtc] data channel open");
   dataChannel.onclose = () => console.log("[webrtc] data channel closed");
 
@@ -74,26 +77,27 @@ async function setupWebRTC(audioStream: MediaStream) {
 // --- Face tracking ---
 let lastVideoTime = -1;
 let run = true;
+const landmarkBuf = new Float32Array(478 * 3);
 
 function renderLoop() {
   if (videoElement.currentTime !== lastVideoTime) {
     const result = faceLandmarker.detectForVideo(
       videoElement,
-      videoElement.currentTime,
+      performance.now(),
     );
 
-    // Send blendshapes over the data channel
+    // Send landmarks as binary Float32Array for minimal overhead
     if (
       dataChannel?.readyState === "open" &&
-      result.faceBlendshapes?.[0]
+      result.faceLandmarks?.[0]
     ) {
-      const bs: Record<string, number> = {};
-      for (const cat of result.faceBlendshapes[0].categories) {
-        if (cat.score > 0.01) {
-          bs[cat.categoryName] = Math.round(cat.score * 1000) / 1000;
-        }
+      const pts = result.faceLandmarks[0];
+      for (let i = 0; i < pts.length; i++) {
+        landmarkBuf[i * 3] = pts[i].x;
+        landmarkBuf[i * 3 + 1] = pts[i].y;
+        landmarkBuf[i * 3 + 2] = pts[i].z;
       }
-      dataChannel.send(JSON.stringify({ t: Date.now(), bs }));
+      dataChannel.send(landmarkBuf.buffer);
     }
 
     lastVideoTime = videoElement.currentTime;
