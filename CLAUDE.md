@@ -23,10 +23,10 @@ Tone.js voice processing
 
 ### Two frontend pages
 
-| Page | URL path | Purpose |
-|------|----------|---------|
+| Page      | URL path   | Purpose                                                |
+| --------- | ---------- | ------------------------------------------------------ |
 | `control` | `/control` | Phone: face tracking + voice processing → streams data |
-| `display` | `/display` | TV: 3D wizard head renderer + audio output |
+| `display` | `/display` | TV: 3D wizard head renderer + audio output             |
 
 ### Backend
 
@@ -100,12 +100,13 @@ Send MediaPipe blendshapes as compact JSON at ~30fps. Only send changed/nonzero 
 ```typescript
 // Sent from control.ts on each frame
 type BlendshapeFrame = {
-  t: number;           // timestamp (ms)
+  t: number; // timestamp (ms)
   bs: Record<string, number>; // blendshape name → score (0–1)
 };
 ```
 
 Key blendshapes to map to the wizard head:
+
 - `jawOpen` → mouth open
 - `mouthSmileLeft`, `mouthSmileRight` → smile
 - `eyeBlinkLeft`, `eyeBlinkRight` → blinks
@@ -116,6 +117,7 @@ Key blendshapes to map to the wizard head:
 ### Three.js Wizard Head (`wizard-head.ts`)
 
 Build procedurally — no imported model. Approximate approach:
+
 - Large sphere for the head (scaled vertically), green-tinted Lambert or Phong material
 - Separate geometry for eyes (glowing orbs), eyebrows (box geometry), lips
 - Use `morphAttributes` on the mouth/eye geometries to create blend shape targets
@@ -173,9 +175,9 @@ cd frontend && npm run dev
 - [x] Vite + TypeScript project scaffolded
 - [x] MediaPipe FaceLandmarker integrated in `control.ts`
 - [x] Tone.js voice chain implemented in `voice.ts`
-- [ ] Multi-page Vite config (`control.html`, `display.html`)
-- [ ] WebSocket signaling server (`backend/`)
-- [ ] WebRTC connection setup (`signaling-client.ts`)
+- [x] Multi-page Vite config (`control.html`, `display.html`)
+- [x] WebSocket signaling server (`backend/`)
+- [x] WebRTC connection setup (`signaling-client.ts`)
 - [ ] Tone.js audio routed to WebRTC track
 - [ ] Blendshape data channel send/receive
 - [ ] Three.js wizard head with morph targets (`wizard-head.ts`)
