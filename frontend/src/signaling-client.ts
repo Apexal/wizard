@@ -69,7 +69,7 @@ export class SignalingClient {
 }
 
 /** Build the signaling server URL based on the current page location. */
-export function getSignalingUrl(port = 8080): string {
+export function getSignalingUrl(): string {
   const host = window.location.hostname || "localhost";
-  return `ws://${host}:${port}`;
+  return `wss://${host}/ws`;
 }
