@@ -9,15 +9,15 @@ export async function startVoice() {
   const pitchShift = new Tone.PitchShift({
     pitch: -3, // Down 8 semitones. Deep, but intelligible!
     windowSize: 0.05,
-    delayTime: Tone.Time("10").toSeconds(),
+    delayTime: 0,
     feedback: 0,
   });
 
   // 2. The Thundering Bass (Equalizer)
   const eq = new Tone.EQ3({
-    low: 4,
+    low: 2,
     mid: 0,
-    high: -2, // Roll off piercing highs
+    high: 2, // Roll off piercing highs
   });
 
   // 3. The Iron Grip (Compressor)
