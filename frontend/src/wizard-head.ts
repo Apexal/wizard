@@ -29,8 +29,6 @@ export function createWizardScene(canvas: HTMLCanvasElement) {
 
   // Scene
   scene = new THREE.Scene();
-  // No scene.background so the bg plane behind the face is visible
-  // Renderer clear color handles edges beyond the bg plane
   renderer.setClearColor(0x000000);
   scene.fog = new THREE.FogExp2(0x000000, 1.5);
 
@@ -65,10 +63,10 @@ export function createWizardScene(canvas: HTMLCanvasElement) {
   const mesh = new THREE.Mesh(geometry, material);
   scene.add(mesh);
 
-  // Lighting — dramatic green from below, white rim from behind
-  const greenLight = new THREE.PointLight(0x00ff44, 4, 10);
-  greenLight.position.set(0, -0.5, 0.5);
-  scene.add(greenLight);
+  // Lighting — green key light in front, rim from behind
+  const keyLight = new THREE.PointLight(0x00ff44, 4, 10);
+  keyLight.position.set(0, 0, 1.2);
+  scene.add(keyLight);
 
   const rimLight = new THREE.PointLight(0xffffff, 2, 10);
   rimLight.position.set(0, 0.2, -1);
@@ -76,23 +74,38 @@ export function createWizardScene(canvas: HTMLCanvasElement) {
 
   scene.add(new THREE.AmbientLight(0x22aa44, 1.5));
 
-  // Background image — large plane behind the face
-  const bgTexture = new THREE.TextureLoader().load("/img/bg.jpg");
-  bgTexture.colorSpace = THREE.SRGBColorSpace;
-  const bgAspect = 1280 / 720; // image aspect ratio
-  const bgHeight = 4;
+  // Background video — looping plane behind the face
+  const bgVideo = document.createElement("video");
+  bgVideo.src = "/video/bg.mp4";
+  bgVideo.loop = true;
+  bgVideo.muted = true;
+  bgVideo.playsInline = true;
+  bgVideo.play();
+  const videoTexture = new THREE.VideoTexture(bgVideo);
+  videoTexture.colorSpace = THREE.SRGBColorSpace;
   const bgPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(bgHeight * bgAspect, bgHeight),
-    new THREE.MeshBasicMaterial({ map: bgTexture, fog: false }),
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ map: videoTexture, fog: false }),
   );
   bgPlane.position.z = -2;
   scene.add(bgPlane);
+
+  // Size the bg plane to cover the viewport at z=-2
+  function sizeBgPlane() {
+    const dist = camera.position.z - bgPlane.position.z;
+    const vFov = (camera.fov * Math.PI) / 180;
+    const h = 2 * Math.tan(vFov / 2) * dist;
+    const w = h * camera.aspect;
+    bgPlane.scale.set(w, h, 1);
+  }
+  sizeBgPlane();
 
   // Handle resize
   window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    sizeBgPlane();
   });
 
   // Start render loop
