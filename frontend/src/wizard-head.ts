@@ -29,7 +29,9 @@ export function createWizardScene(canvas: HTMLCanvasElement) {
 
   // Scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000000);
+  // No scene.background so the bg plane behind the face is visible
+  // Renderer clear color handles edges beyond the bg plane
+  renderer.setClearColor(0x000000);
   scene.fog = new THREE.FogExp2(0x000000, 1.5);
 
   // Camera
@@ -52,9 +54,9 @@ export function createWizardScene(canvas: HTMLCanvasElement) {
 
   // Green-tinted material
   const material = new THREE.MeshPhongMaterial({
-    color: 0x00cc44,
-    emissive: 0x003311,
-    specular: 0x115533,
+    color: 0x22ee66,
+    emissive: 0x0a6630,
+    specular: 0x33aa66,
     shininess: 30,
     side: THREE.DoubleSide,
     flatShading: true,
@@ -64,15 +66,27 @@ export function createWizardScene(canvas: HTMLCanvasElement) {
   scene.add(mesh);
 
   // Lighting — dramatic green from below, white rim from behind
-  const greenLight = new THREE.PointLight(0x00ff44, 2, 10);
+  const greenLight = new THREE.PointLight(0x00ff44, 4, 10);
   greenLight.position.set(0, -0.5, 0.5);
   scene.add(greenLight);
 
-  const rimLight = new THREE.PointLight(0xffffff, 1, 10);
+  const rimLight = new THREE.PointLight(0xffffff, 2, 10);
   rimLight.position.set(0, 0.2, -1);
   scene.add(rimLight);
 
-  scene.add(new THREE.AmbientLight(0x112211, 0.5));
+  scene.add(new THREE.AmbientLight(0x22aa44, 1.5));
+
+  // Background image — large plane behind the face
+  const bgTexture = new THREE.TextureLoader().load("/img/bg.jpg");
+  bgTexture.colorSpace = THREE.SRGBColorSpace;
+  const bgAspect = 1280 / 720; // image aspect ratio
+  const bgHeight = 4;
+  const bgPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(bgHeight * bgAspect, bgHeight),
+    new THREE.MeshBasicMaterial({ map: bgTexture, fog: false }),
+  );
+  bgPlane.position.z = -2;
+  scene.add(bgPlane);
 
   // Handle resize
   window.addEventListener("resize", () => {

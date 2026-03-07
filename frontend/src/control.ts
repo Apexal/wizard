@@ -1,3 +1,4 @@
+import "./control.css";
 import { FilesetResolver, FaceLandmarker } from "@mediapipe/tasks-vision";
 import { startVoice } from "./voice";
 import { SignalingClient, getSignalingUrl } from "./signaling-client";
@@ -6,6 +7,17 @@ import { SOUNDS } from "./sounds";
 const videoElement = document.getElementById("webcam") as HTMLVideoElement;
 const startButton = document.getElementById("start") as HTMLButtonElement;
 const stopButton = document.getElementById("stop") as HTMLButtonElement;
+const statusPill = document.getElementById("status-pill") as HTMLDivElement;
+const statusText = document.getElementById("status-text") as HTMLSpanElement;
+const pipContainer = document.getElementById("pip-container") as HTMLDivElement;
+
+function setStatus(state: "offline" | "connecting" | "connected") {
+  statusPill.classList.toggle("connected", state === "connected");
+  statusText.textContent =
+    state === "offline" ? "Offline" :
+    state === "connecting" ? "Connecting..." :
+    "Live";
+}
 
 const vision = await FilesetResolver.forVisionTasks(
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
@@ -38,8 +50,8 @@ async function setupWebRTC(audioStream: MediaStream) {
       console.log("[webrtc] received display cam video track");
       const videoEl = document.getElementById("display-cam") as HTMLVideoElement;
       videoEl.srcObject = e.streams[0];
-      videoEl.style.display = "block";
       videoEl.play();
+      pipContainer.classList.add("visible");
     }
   };
 
@@ -69,6 +81,11 @@ async function setupWebRTC(audioStream: MediaStream) {
 
   pc.onconnectionstatechange = () => {
     console.log("[webrtc] connection state:", pc!.connectionState);
+    if (pc!.connectionState === "connected") {
+      setStatus("connected");
+    } else if (pc!.connectionState === "failed" || pc!.connectionState === "disconnected") {
+      setStatus("offline");
+    }
   };
 
   // Handle signaling messages from display page
@@ -149,6 +166,10 @@ startButton.addEventListener("click", async () => {
     console.error("Error accessing webcam: ", err);
   }
 
+  setStatus("connecting");
+  startButton.classList.add("hidden");
+  stopButton.classList.remove("hidden");
+
   const audioStream = await startVoice();
   await setupWebRTC(audioStream);
 });
@@ -167,16 +188,25 @@ for (const s of SOUNDS) {
   localAudioCache[s.id] = a;
 }
 
-// Build soundboard buttons
+// Build soundboard buttons with ripple effect
 const soundButtonsEl = document.getElementById("sound-buttons");
 if (soundButtonsEl) {
   for (const s of SOUNDS) {
     const btn = document.createElement("button");
     btn.textContent = s.label;
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
       playSound(s.id);
       const a = localAudioCache[s.id];
       if (a) { a.currentTime = 0; a.play(); }
+
+      // Ripple effect
+      const ripple = document.createElement("span");
+      ripple.className = "ripple";
+      const rect = btn.getBoundingClientRect();
+      ripple.style.left = `${(e as MouseEvent).clientX - rect.left - 30}px`;
+      ripple.style.top = `${(e as MouseEvent).clientY - rect.top - 30}px`;
+      btn.appendChild(ripple);
+      ripple.addEventListener("animationend", () => ripple.remove());
     });
     soundButtonsEl.appendChild(btn);
   }
@@ -189,5 +219,11 @@ stopButton.addEventListener("click", () => {
   soundChannel?.close();
   pc?.close();
   signaling.close();
+
+  setStatus("offline");
+  stopButton.classList.add("hidden");
+  startButton.classList.remove("hidden");
+  pipContainer.classList.remove("visible");
+
   console.log("Streaming stopped");
 });

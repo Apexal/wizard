@@ -3,17 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Wizard — Control</title>
   </head>
   <body>
     <div id="app">
-      <video id="webcam" autoplay muted playsinline></video>
-      <video id="display-cam" autoplay playsinline style="display:none"></video>
-      <button id="start">Begin Streaming</button>
-      <button id="stop">Stop Streaming</button>
-      <section id="soundboard">
-        <h2>Soundboard</h2>
+      <header class="control-header">
+        <h1>Wizard</h1>
+        <div class="status-pill" id="status-pill">
+          <span class="status-dot"></span>
+          <span id="status-text">Offline</span>
+        </div>
+      </header>
+
+      <div class="webcam-stage">
+        <video id="webcam" autoplay muted playsinline></video>
+        <div class="pip-container" id="pip-container">
+          <video id="display-cam" autoplay playsinline></video>
+          <div class="pip-label">Display</div>
+        </div>
+      </div>
+
+      <div class="stream-toggle">
+        <button id="start">Begin Streaming</button>
+        <button id="stop" class="hidden">Stop Streaming</button>
+      </div>
+
+      <section class="soundboard">
+        <div class="soundboard-label">Soundboard</div>
         <div id="sound-buttons"></div>
       </section>
     </div>
