@@ -1,5 +1,6 @@
 import { SignalingClient, getSignalingUrl } from "./signaling-client";
 import { createWizardScene, updateFaceMesh } from "./wizard-head";
+import { SOUNDS } from "./sounds";
 
 const connectButton = document.getElementById("connect") as HTMLButtonElement;
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
@@ -23,16 +24,34 @@ function setupWebRTC() {
     audio.play();
   };
 
-  // Receive landmark data as binary Float32Array
+  // Preload sounds
+  const audioCache: Record<string, HTMLAudioElement> = {};
+  for (const s of SOUNDS) {
+    const a = new Audio(s.file);
+    a.preload = "auto";
+    audioCache[s.id] = a;
+  }
+
+  // Receive data channels
   pc.ondatachannel = (e) => {
     console.log("[webrtc] data channel received:", e.channel.label);
-    const channel = e.channel;
-    channel.binaryType = "arraybuffer";
-    channel.onmessage = (evt) => {
-      if (evt.data instanceof ArrayBuffer) {
-        updateFaceMesh(new Float32Array(evt.data));
-      }
-    };
+    if (e.channel.label === "blendshapes") {
+      const channel = e.channel;
+      channel.binaryType = "arraybuffer";
+      channel.onmessage = (evt) => {
+        if (evt.data instanceof ArrayBuffer) {
+          updateFaceMesh(new Float32Array(evt.data));
+        }
+      };
+    } else if (e.channel.label === "soundboard") {
+      e.channel.onmessage = (evt) => {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === "sound" && audioCache[msg.id]) {
+          audioCache[msg.id].currentTime = 0;
+          audioCache[msg.id].play();
+        }
+      };
+    }
   };
 
   // Send ICE candidates to the control page

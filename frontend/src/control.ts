@@ -1,6 +1,7 @@
 import { FilesetResolver, FaceLandmarker } from "@mediapipe/tasks-vision";
 import { startVoice } from "./voice";
 import { SignalingClient, getSignalingUrl } from "./signaling-client";
+import { SOUNDS } from "./sounds";
 
 const videoElement = document.getElementById("webcam") as HTMLVideoElement;
 const startButton = document.getElementById("start") as HTMLButtonElement;
@@ -24,6 +25,7 @@ const faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
 const signaling = new SignalingClient(getSignalingUrl());
 let pc: RTCPeerConnection | null = null;
 let dataChannel: RTCDataChannel | null = null;
+let soundChannel: RTCDataChannel | null = null;
 
 async function setupWebRTC(audioStream: MediaStream) {
   pc = new RTCPeerConnection({
@@ -53,6 +55,10 @@ async function setupWebRTC(audioStream: MediaStream) {
   });
   dataChannel.onopen = () => console.log("[webrtc] data channel open");
   dataChannel.onclose = () => console.log("[webrtc] data channel closed");
+
+  soundChannel = pc.createDataChannel("soundboard", { ordered: true });
+  soundChannel.onopen = () => console.log("[webrtc] soundboard channel open");
+  soundChannel.onclose = () => console.log("[webrtc] soundboard channel closed");
 
   // Send ICE candidates to the display page
   pc.onicecandidate = (e) => {
@@ -147,10 +153,40 @@ startButton.addEventListener("click", async () => {
   await setupWebRTC(audioStream);
 });
 
+function playSound(id: string) {
+  if (soundChannel?.readyState === "open") {
+    soundChannel.send(JSON.stringify({ type: "sound", id }));
+  }
+}
+
+// Preload sounds locally for preview
+const localAudioCache: Record<string, HTMLAudioElement> = {};
+for (const s of SOUNDS) {
+  const a = new Audio(s.file);
+  a.preload = "auto";
+  localAudioCache[s.id] = a;
+}
+
+// Build soundboard buttons
+const soundButtonsEl = document.getElementById("sound-buttons");
+if (soundButtonsEl) {
+  for (const s of SOUNDS) {
+    const btn = document.createElement("button");
+    btn.textContent = s.label;
+    btn.addEventListener("click", () => {
+      playSound(s.id);
+      const a = localAudioCache[s.id];
+      if (a) { a.currentTime = 0; a.play(); }
+    });
+    soundButtonsEl.appendChild(btn);
+  }
+}
+
 stopButton.addEventListener("click", () => {
   run = false;
   videoElement.pause();
   dataChannel?.close();
+  soundChannel?.close();
   pc?.close();
   signaling.close();
   console.log("Streaming stopped");

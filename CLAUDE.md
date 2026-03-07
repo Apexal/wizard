@@ -93,38 +93,33 @@ const audioTrack = dest.stream.getAudioTracks()[0];
 peerConnection.addTrack(audioTrack, dest.stream);
 ```
 
-### Blendshape Data Channel
+### Landmark Data Channel
 
-Send MediaPipe blendshapes as compact JSON at ~30fps. Only send changed/nonzero values.
+Face data is sent as a binary `Float32Array` (not JSON blendshapes). Each frame contains all 478 MediaPipe face landmarks packed as `[x0, y0, z0, x1, y1, z1, ...]` — 1434 floats total (~5.5 KB/frame).
 
 ```typescript
 // Sent from control.ts on each frame
-type BlendshapeFrame = {
-  t: number; // timestamp (ms)
-  bs: Record<string, number>; // blendshape name → score (0–1)
-};
+const landmarkBuf = new Float32Array(478 * 3);
+// ... fill x/y/z per landmark ...
+dataChannel.send(landmarkBuf.buffer); // binary ArrayBuffer
 ```
 
-Key blendshapes to map to the wizard head:
+The data channel is configured unreliable (`ordered: false, maxRetransmits: 0`) so stale frames are dropped rather than queued.
 
-- `jawOpen` → mouth open
-- `mouthSmileLeft`, `mouthSmileRight` → smile
-- `eyeBlinkLeft`, `eyeBlinkRight` → blinks
-- `browInnerUp`, `browDownLeft`, `browDownRight` → eyebrow anger/surprise
-- `mouthFunnel`, `mouthPucker` → lip shapes
-- `cheekPuff` → puffed cheeks
+### Three.js Face Mesh (`wizard-head.ts`)
 
-### Three.js Wizard Head (`wizard-head.ts`)
+Renders the real-time face mesh directly from MediaPipe landmarks — not a procedural wizard head:
 
-Build procedurally — no imported model. Approximate approach:
+- 478-vertex `BufferGeometry` with `DynamicDrawUsage` positions
+- Triangle indices built from `FaceLandmarker.FACE_LANDMARKS_TESSELATION`
+- Green-tinted `MeshPhongMaterial` with `flatShading: true`
+- MediaPipe coords (0–1, top-left origin) mapped to Three.js space: center at 0, Y flipped, scaled ×1.5
+- Dramatic lighting: green `PointLight` below, white rim `PointLight` behind, dim ambient
+- Black background + `FogExp2` for disembodied effect
 
-- Large sphere for the head (scaled vertically), green-tinted Lambert or Phong material
-- Separate geometry for eyes (glowing orbs), eyebrows (box geometry), lips
-- Use `morphAttributes` on the mouth/eye geometries to create blend shape targets
-- Floating animation: slow sinusoidal Y-axis oscillation
-- Volumetric mist: particle system (points) beneath the head
-- Dramatic lighting: green point light below, white rim light behind
-- Optional: disembodied effect with dark background + fog
+### Reverse Video
+
+The display page optionally streams its webcam back to the control page (for monitoring). After the initial WebRTC connection is established, `display.ts` adds its webcam track and triggers renegotiation — display becomes the offerer for the second negotiation.
 
 ### Signaling Protocol (WebSocket messages)
 
@@ -136,7 +131,7 @@ type SignalMessage =
   | { type: "ready" }; // sent by display page when it's listening
 ```
 
-Server just broadcasts to the other connected client.
+Server just broadcasts to the other connected client. Both peers can originate offers — control sends the initial offer, display sends a renegotiation offer when it adds its webcam track.
 
 ### Vite Multi-Page Config
 
@@ -163,12 +158,17 @@ cd backend && npm run dev
 # Terminal 2 — frontend
 cd frontend && npm run dev
 
-# Access on local network:
-# Phone: http://<laptop-ip>:5173/control
-# TV:    http://<laptop-ip>:5173/display
+# Terminal 3 — ngrok tunnel (for HTTPS on mobile)
+ngrok http 5173
 ```
 
-**Important**: Both pages need HTTPS or localhost for camera/mic permissions. In dev, Vite's `--host` flag exposes on local network but browsers may block camera access over plain HTTP on non-localhost. Use a self-signed cert or enable the browser flag `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
+Vite proxies `/ws` → `ws://localhost:8080` so the frontend only needs one origin for both HTTP and WebSocket.
+
+The ngrok hostname `sheaflike-carley-literately.ngrok-free.dev` is allowlisted in `vite.config.js`. Update it if the tunnel URL changes.
+
+**Access:**
+- Local: `http://localhost:5173/control` and `http://localhost:5173/display`
+- Remote (phone/TV): use the ngrok HTTPS URL — required for camera/mic permissions on non-localhost
 
 ## Current Status
 
@@ -178,8 +178,10 @@ cd frontend && npm run dev
 - [x] Multi-page Vite config (`control.html`, `display.html`)
 - [x] WebSocket signaling server (`backend/`)
 - [x] WebRTC connection setup (`signaling-client.ts`)
-- [ ] Tone.js audio routed to WebRTC track
-- [ ] Blendshape data channel send/receive
-- [ ] Three.js wizard head with morph targets (`wizard-head.ts`)
-- [ ] Display page (`display.ts`) — receive + render
-- [ ] Polish: mist particles, lighting, floating animation
+- [x] Tone.js audio routed to WebRTC track (`voice.ts` returns `MediaStream`)
+- [x] Face landmark data channel — binary `Float32Array`, unreliable UDP-like
+- [x] Three.js face mesh renderer (`wizard-head.ts`) — green-tinted, dramatic lighting
+- [x] Display page (`display.ts`) — receive landmarks + audio, render face mesh
+- [x] Reverse video — display webcam streamed back to control page
+- [x] ngrok tunneling — HTTPS for camera/mic on mobile devices
+- [ ] Polish: mist particles, floating animation

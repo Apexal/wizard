@@ -71,5 +71,6 @@ export class SignalingClient {
 /** Build the signaling server URL based on the current page location. */
 export function getSignalingUrl(): string {
   const host = window.location.hostname || "localhost";
-  return `wss://${host}/ws`;
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+  return `ws://localhost:8080/ws`;
 }
