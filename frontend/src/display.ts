@@ -24,13 +24,19 @@ function setupWebRTC() {
     audio.play();
   };
 
-  // Preload sounds
-  const audioCache: Record<string, HTMLAudioElement> = {};
+  // Preload sounds as AudioBuffers (Web Audio API avoids stealing the media session)
+  const audioCtx = new AudioContext();
+  const bufferCache: Record<string, AudioBuffer> = {};
   for (const s of SOUNDS) {
-    const a = new Audio(s.file);
-    a.preload = "auto";
-    audioCache[s.id] = a;
+    fetch(s.file)
+      .then((r) => r.arrayBuffer())
+      .then((buf) => audioCtx.decodeAudioData(buf))
+      .then((decoded) => { bufferCache[s.id] = decoded; })
+      .catch((err) => console.warn("[sound] failed to load", s.id, err));
   }
+
+  // Reusable buffer to avoid per-frame allocation
+  const landmarkBuf = new Float32Array(478 * 3);
 
   // Receive data channels
   pc.ondatachannel = (e) => {
@@ -40,15 +46,18 @@ function setupWebRTC() {
       channel.binaryType = "arraybuffer";
       channel.onmessage = (evt) => {
         if (evt.data instanceof ArrayBuffer) {
-          updateFaceMesh(new Float32Array(evt.data));
+          landmarkBuf.set(new Float32Array(evt.data));
+          updateFaceMesh(landmarkBuf);
         }
       };
     } else if (e.channel.label === "soundboard") {
       e.channel.onmessage = (evt) => {
         const msg = JSON.parse(evt.data);
-        if (msg.type === "sound" && audioCache[msg.id]) {
-          audioCache[msg.id].currentTime = 0;
-          audioCache[msg.id].play();
+        if (msg.type === "sound" && bufferCache[msg.id]) {
+          const src = audioCtx.createBufferSource();
+          src.buffer = bufferCache[msg.id];
+          src.connect(audioCtx.destination);
+          src.start();
         }
       };
     }
@@ -103,8 +112,9 @@ function setupWebRTC() {
 connectButton.addEventListener("click", async () => {
   connectButton.remove();
 
-  // Init Three.js scene
-  createWizardScene(canvas);
+  // Init Three.js scene — startBgVideo must be called in this click handler
+  const startBgVideo = createWizardScene(canvas);
+  startBgVideo();
 
   // Detect webcam — if present, stream it to the control page once connected
   try {

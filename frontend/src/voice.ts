@@ -34,15 +34,35 @@ export async function startVoice(): Promise<MediaStream> {
     release: 0.1,
   });
 
-  // 4. The Grand Hall (Reverb)
+  // 4. Auto-gain normalization — adjusts to a target RMS level
+  const targetRMS = 0.15;
+  const autoGain = new Tone.Gain(1);
+  const meter = new Tone.Meter({ smoothing: 0.9 });
+  compressor.connect(meter);
+
+  // Periodically adjust gain to hit target level
+  setInterval(() => {
+    const dbVal = meter.getValue() as number;
+    if (dbVal < -100) return; // silence, don't adjust
+    const rms = Math.pow(10, dbVal / 20);
+    if (rms > 0.001) {
+      const desired = targetRMS / rms;
+      // Clamp between 0.5x and 10x, move slowly
+      const clamped = Math.max(0.5, Math.min(10, desired));
+      const current = autoGain.gain.value;
+      autoGain.gain.value = current + (clamped - current) * 0.1;
+    }
+  }, 200);
+
+  // 5. The Grand Hall (Reverb)
   const reverb = new Tone.Freeverb({
     roomSize: 0.6, // A massive throne room
     dampening: 4000,
     wet: 0.35, // 35% echo, 65% your actual voice
   });
 
-  // Chain: Mic -> Pitch -> EQ -> Compressor -> Reverb
-  mic.chain(pitchShift, eq, compressor, reverb);
+  // Chain: Mic -> Pitch -> EQ -> Compressor -> AutoGain -> Reverb
+  mic.chain(pitchShift, eq, compressor, autoGain, reverb);
 
   // Tap the processed output into a MediaStream for WebRTC
   const rawCtx = Tone.getContext().rawContext as AudioContext;
